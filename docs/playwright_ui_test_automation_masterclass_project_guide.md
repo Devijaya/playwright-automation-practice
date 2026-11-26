@@ -509,3 +509,343 @@ saucedemo-playwright-automation/
 When an interviewer asks *"Tell me about your UI automation experience"*, explain both the architecture and the business value:
 
 > *"I built a cross-browser UI test automation framework for SauceDemo using Playwright and JavaScript, structured with the Page Object Model design pattern. I separated element locators and page actions into dedicated Page classes (`LoginPage`, `InventoryPage`, `CheckoutPage`) and wrote modular test specs covering authentication edge cases, dynamic product sorting, cart badge updates, and end-to-end checkout flows. The suite executes 21 automated tests across Chromium, Firefox, and WebKit, generates HTML test reports, and runs automatically on every push via a GitHub Actions CI pipeline."*
+
+
+---
+
+## Part 8: Full Project Overview & How Everything Works
+
+### 1. What Is This Project?
+
+This project (**`saucedemo-playwright-automation`**) is a complete, portfolio-ready **End-to-End (E2E) Cross-Browser UI Test Automation Framework** targeting the **SauceDemo** e-commerce web application (`https://www.saucedemo.com/`).
+
+* **Tech Stack:**
+  * **Test Framework:** Playwright Test (`@playwright/test` `^1.65.1`)
+  * **Language:** JavaScript (CommonJS) on Node.js
+  * **Design Pattern:** Page Object Model (POM)
+  * **Browsers Tested:** Chromium (`Desktop Chrome`), Firefox (`Desktop Firefox`), and WebKit (`Desktop Safari`)
+  * **Reporting & Debugging:** Playwright HTML Reporter (`playwright-report/`), failure context snapshots (`test-results/`), and `trace: 'on-first-retry'`
+  * **CI/CD:** GitHub Actions (`.github/workflows/playwright.yml`)
+
+* **Complete Repository Structure:**
+  ```text
+  saucedemo-playwright-automation/
+  ├── .github/
+  │   └── workflows/
+  │       └── playwright.yml          # GitHub Actions CI pipeline
+  ├── docs/
+  │   └── playwright_ui_test_automation_masterclass_project_guide.md
+  ├── pages/                          # Page Object Model classes (locators + actions)
+  │   ├── LoginPage.js
+  │   ├── InventoryPage.js
+  │   └── CheckoutPage.js
+  ├── tests/                          # Test specifications (assertions + test flows)
+  │   ├── login.spec.js               # TC_AUTO_01 – TC_AUTO_04
+  │   └── e2e-purchase.spec.js        # TC_AUTO_05 – TC_AUTO_07
+  ├── .gitignore                      # Ignores node_modules/, playwright-report/, test-results/
+  ├── package.json                    # Project metadata & devDependencies
+  ├── package-lock.json               # Locked dependency tree for npm ci
+  ├── playwright.config.js            # Test runner, browser projects, reporter & CI settings
+  ├── playwright-report-results.png   # Visual proof of 21/21 passing tests
+  └── README.md                       # Project documentation for GitHub
+  ```
+
+### 2. How This Framework Works (End-to-End Execution Flow)
+
+1. **Configuration (`playwright.config.js`):**
+   * `testDir: './tests'` tells Playwright where to discover `*.spec.js` files.
+   * `fullyParallel: true` runs tests in parallel across multiple worker processes locally (`workers: undefined` uses available CPU cores), while `workers: 1` and `retries: 2` are enabled automatically when `process.env.CI` is set (such as inside GitHub Actions).
+   * `forbidOnly: !!process.env.CI` prevents accidentally pushing `test.only(...)` to CI.
+   * `reporter: 'html'` generates an interactive HTML report in `playwright-report/`.
+   * `projects` defines 3 browser targets (`chromium`, `firefox`, `webkit`), so each of the **7 test cases** runs **3 times** (**21 total executions**).
+
+2. **Test Lifecycle (`tests/*.spec.js`):**
+   * Each test receives an isolated browser context and `{ page }` fixture from Playwright, meaning cookies, `localStorage`, and cart state never leak between tests.
+   * In `tests/login.spec.js`, each test instantiates `new LoginPage(page)` and validates positive login (`TC_AUTO_01`) and negative login errors (`TC_AUTO_02`–`TC_AUTO_04`).
+   * In `tests/e2e-purchase.spec.js`, `test.beforeEach` logs in as `standard_user` and asserts navigation to `inventory.html` before each test runs (`TC_AUTO_05`–`TC_AUTO_07`).
+
+3. **Page Object Interaction (`pages/*.js`):**
+   * Test files never hardcode CSS/attribute selectors. Instead, they call readable methods such as `loginPage.login(...)`, `inventoryPage.sortBy('lohi')`, `inventoryPage.addProductToCart(...)`, and `checkoutPage.fillCustomerDetails(...)`.
+   * **Cross-Browser Stability Detail (`CheckoutPage.js`):** In `CheckoutPage.js`, `proceedToCheckout()` waits for the URL `/.*checkout-step-one\.html/`, and `fillCustomerDetails()` explicitly calls `await this.firstNameInput.click()` before `fill(firstName)`. During cross-browser testing on WebKit, filling `firstNameInput` immediately after clicking Checkout occasionally left the First Name field blank due to form render/focus timing; waiting for the checkout URL and focusing the input resolved it cleanly across all 21 runs.
+
+4. **CI/CD Pipeline (`.github/workflows/playwright.yml`):**
+   * Triggers automatically on every `push` or `pull_request` to `main` or `master`.
+   * Runs on `ubuntu-latest` with Node.js LTS, installs exact dependencies with `npm ci`, installs browsers and OS dependencies with `npx playwright install --with-deps`, runs `npx playwright test`, and uploads `playwright-report/` as a downloadable artifact retained for 30 days (`actions/upload-artifact@v4`).
+
+---
+
+## Part 9: Commands to Run & Expected Outcomes
+
+Use this reference table to know **what to run** and **what outcome you should see**:
+
+| Goal | Command | Expected Outcome |
+| :--- | :--- | :--- |
+| **Run full cross-browser suite** | `npx playwright test` | Executes **21 tests** across `chromium`, `firefox`, and `webkit`. Terminal ends with `21 passed` (typically ~20–30s depending on machine/network). |
+| **Run on Chromium only (fast check)** | `npx playwright test --project=chromium` | Executes **7 tests** on Chromium and prints `7 passed`. |
+| **Watch tests visually in browser** | `npx playwright test --project=chromium --headed` | Opens a visible Chrome window and executes the 7 Chromium tests live. |
+| **Run a single spec file** | `npx playwright test tests/login.spec.js` | Executes only the 4 login tests across 3 browsers (`12 passed`). |
+| **Open interactive UI Mode** | `npx playwright test --ui` | Launches Playwright's visual test runner where you can step through actions, inspect DOM snapshots, and watch timelines. |
+| **Debug a test step-by-step** | `npx playwright test --debug` | Opens Playwright Inspector to pause and step through each locator and assertion. |
+| **View the HTML test report** | `npx playwright show-report` | Opens the local report server in your browser showing `All 21`, `Passed 21`, `Failed 0`, `Flaky 0`, `Skipped 0`, and per-browser durations. |
+
+> [!NOTE]
+> These tests run against the live public site `https://www.saucedemo.com/`. An active internet connection is required; if offline or blocked by DNS/firewall, tests will fail with `ERR_NAME_NOT_RESOLVED` or `Could not resolve hostname`.
+
+---
+
+## Part 10: Playwright Learning Reference (Deep Dive)
+
+This project is designed as a hands-on Playwright learning handbook. Below are the core Playwright concepts demonstrated in this codebase:
+
+1. **Test Runner & Built-in `{ page }` Fixture:**
+   * Playwright's `test('name', async ({ page }) => { ... })` automatically creates a fresh `BrowserContext` and `Page` per test and tears them down afterward. This guarantees **test isolation**—if `TC_AUTO_07` adds items to the cart, it will never affect `TC_AUTO_05` or `TC_AUTO_06`.
+
+2. **Grouping & Hooks (`test.describe` & `test.beforeEach`):**
+   * `test.describe(...)` groups related tests into logical suites (`Authentication Test Suite` and `E-Commerce Shopping & Checkout Suite`).
+   * `test.beforeEach(...)` eliminates repetitive login steps in `e2e-purchase.spec.js` so every shopping/checkout test starts authenticated on `inventory.html`.
+
+3. **Locator Priority & Parameterized Locators:**
+   * Static locators are defined once in the Page Object `constructor(page)` (e.g., `page.locator('[data-test="username"]')`).
+   * Dynamic locators use template methods (e.g., `page.locator(\`[data-test="add-to-cart-${productSlug}"]\`)`) so a single method works for any product (`sauce-labs-backpack`, `sauce-labs-bike-light`, etc.).
+
+4. **Web-First Assertions vs. Value Assertions:**
+   * **Web-First (auto-retrying):** `await expect(page).toHaveURL(/.*inventory.html/)`, `await expect(loginPage.errorMessage).toBeVisible()`, and `await expect(inventoryPage.cartBadge).toHaveText('2')` automatically poll until the condition passes or the timeout expires.
+   * **Value Assertion:** `expect(firstItemPrice).toBe('$7.99')` checks an already-fetched string value synchronously.
+
+5. **Failure Artifacts & Traces:**
+   * When a test fails, Playwright automatically saves a Markdown DOM snapshot (`test-results/<test-name>/error-context.md`) showing the exact page state and failing line.
+   * With `trace: 'on-first-retry'` in `playwright.config.js`, CI retries capture a full trace (`trace.zip`) viewable via `npx playwright show-trace` or inside the HTML report.
+
+---
+
+## Part 11: What I Have Learned From This Project
+
+By building and verifying this framework from scratch, I gained practical experience in:
+
+* **Designing a Maintainable POM Architecture:** Separating element locators and UI interactions (`pages/`) from test scenarios and assertions (`tests/`) so UI changes only require updating a single Page Object file.
+* **Writing Resilient Locator Strategies:** Choosing stable `[data-test="..."]` attributes and clean class selectors over brittle XPaths.
+* **Comprehensive Test Case Design:** Covering both **positive happy paths** (`TC_AUTO_01`, `TC_AUTO_05`, `TC_AUTO_07`) and **negative/validation edge cases** (`TC_AUTO_02` locked-out user, `TC_AUTO_03` wrong password, `TC_AUTO_04` blank password, `TC_AUTO_06` blank checkout fields).
+* **Cross-Browser Testing & Debugging:** Executing the same suite across Chromium, Firefox, and WebKit, diagnosing a WebKit-specific form focus/hydration timing issue in `CheckoutPage.js`, and fixing it cleanly without hard-coded `sleep()` calls.
+* **Test Reporting & Visual Proof:** Generating Playwright HTML reports and capturing report artifacts (`playwright-report-results.png`) for documentation.
+* **CI/CD Automation with GitHub Actions:** Configuring automated cloud test runs and report artifact uploads on every `push` and `pull_request`.
+
+---
+
+## Part 12: Setup & Run Guide for Anyone Cloning This Repository
+
+If someone clones this repository onto a new machine, follow these exact steps to set it up and run the tests:
+
+### Prerequisites
+* **Node.js (LTS)** (`v18+` or `v20+` / `v22+` recommended) and **npm**
+* **Git**
+* **Internet access** (to install npm packages, download Playwright browsers, and reach `https://www.saucedemo.com/`)
+
+### Step-by-Step Setup
+
+1. **Clone the repository and enter the folder:**
+   ```bash
+   git clone https://github.com/<your-username>/saucedemo-playwright-automation.git
+   cd saucedemo-playwright-automation
+   ```
+
+2. **Install Node.js dependencies:**
+   ```bash
+   npm install
+   ```
+   *(This installs `@playwright/test` and `@types/node` from `package-lock.json`.)*
+
+3. **Install Playwright browser binaries:**
+   * **Windows / macOS:**
+     ```bash
+     npx playwright install
+     ```
+   * **Linux (e.g., Ubuntu/Debian, to also install required OS libraries):**
+     ```bash
+     npx playwright install --with-deps
+     ```
+
+4. **Run the full test suite:**
+   ```bash
+   npx playwright test
+   ```
+   **Expected outcome:** `21 passed` across Chromium, Firefox, and WebKit.
+
+5. **View the HTML test report:**
+   ```bash
+   npx playwright show-report
+   ```
+
+### Quick Troubleshooting
+* **`Executable doesn't exist` error:** Run `npx playwright install` again to download the Playwright-managed browser binaries.
+* **`ERR_NAME_NOT_RESOLVED` / `Could not resolve hostname`:** Verify your internet connection and that `https://www.saucedemo.com/` is not blocked by a proxy or firewall.
+* **Timeout on a slow network:** Re-run with a higher timeout, e.g. `npx playwright test --timeout=60000`, or run a single browser project first (`npx playwright test --project=chromium`).
+
+
+---
+
+## Part 8: Full Project Overview & How Everything Works
+
+### 1. What Is This Project?
+
+This project (**`saucedemo-playwright-automation`**) is a complete, portfolio-ready **End-to-End (E2E) Cross-Browser UI Test Automation Framework** targeting the **SauceDemo** e-commerce web application (`https://www.saucedemo.com/`).
+
+* **Tech Stack:**
+  * **Test Framework:** Playwright Test (`@playwright/test` `^1.65.1`)
+  * **Language:** JavaScript (CommonJS) on Node.js
+  * **Design Pattern:** Page Object Model (POM)
+  * **Browsers Tested:** Chromium (`Desktop Chrome`), Firefox (`Desktop Firefox`), and WebKit (`Desktop Safari`)
+  * **Reporting & Debugging:** Playwright HTML Reporter (`playwright-report/`), failure context snapshots (`test-results/`), and `trace: 'on-first-retry'`
+  * **CI/CD:** GitHub Actions (`.github/workflows/playwright.yml`)
+
+* **Complete Repository Structure:**
+  ```text
+  saucedemo-playwright-automation/
+  ├── .github/
+  │   └── workflows/
+  │       └── playwright.yml          # GitHub Actions CI pipeline
+  ├── docs/
+  │   └── playwright_ui_test_automation_masterclass_project_guide.md
+  ├── pages/                          # Page Object Model classes (locators + actions)
+  │   ├── LoginPage.js
+  │   ├── InventoryPage.js
+  │   └── CheckoutPage.js
+  ├── tests/                          # Test specifications (assertions + test flows)
+  │   ├── login.spec.js               # TC_AUTO_01 – TC_AUTO_04
+  │   └── e2e-purchase.spec.js        # TC_AUTO_05 – TC_AUTO_07
+  ├── .gitignore                      # Ignores node_modules/, playwright-report/, test-results/
+  ├── package.json                    # Project metadata & devDependencies
+  ├── package-lock.json               # Locked dependency tree for npm ci
+  ├── playwright.config.js            # Test runner, browser projects, reporter & CI settings
+  ├── playwright-report-results.png   # Visual proof of 21/21 passing tests
+  └── README.md                       # Project documentation for GitHub
+  ```
+
+### 2. How This Framework Works (End-to-End Execution Flow)
+
+1. **Configuration (`playwright.config.js`):**
+   * `testDir: './tests'` tells Playwright where to discover `*.spec.js` files.
+   * `fullyParallel: true` runs tests in parallel across multiple worker processes locally (`workers: undefined` uses available CPU cores), while `workers: 1` and `retries: 2` are enabled automatically when `process.env.CI` is set (such as inside GitHub Actions).
+   * `forbidOnly: !!process.env.CI` prevents accidentally pushing `test.only(...)` to CI.
+   * `reporter: 'html'` generates an interactive HTML report in `playwright-report/`.
+   * `projects` defines 3 browser targets (`chromium`, `firefox`, `webkit`), so each of the **7 test cases** runs **3 times** (**21 total executions**).
+
+2. **Test Lifecycle (`tests/*.spec.js`):**
+   * Each test receives an isolated browser context and `{ page }` fixture from Playwright, meaning cookies, `localStorage`, and cart state never leak between tests.
+   * In `tests/login.spec.js`, each test instantiates `new LoginPage(page)` and validates positive login (`TC_AUTO_01`) and negative login errors (`TC_AUTO_02`–`TC_AUTO_04`).
+   * In `tests/e2e-purchase.spec.js`, `test.beforeEach` logs in as `standard_user` and asserts navigation to `inventory.html` before each test runs (`TC_AUTO_05`–`TC_AUTO_07`).
+
+3. **Page Object Interaction (`pages/*.js`):**
+   * Test files never hardcode CSS/attribute selectors. Instead, they call readable methods such as `loginPage.login(...)`, `inventoryPage.sortBy('lohi')`, `inventoryPage.addProductToCart(...)`, and `checkoutPage.fillCustomerDetails(...)`.
+   * **Cross-Browser Stability Detail (`CheckoutPage.js`):** In `CheckoutPage.js`, `proceedToCheckout()` waits for the URL `/.*checkout-step-one\.html/`, and `fillCustomerDetails()` explicitly calls `await this.firstNameInput.click()` before `fill(firstName)`. During cross-browser testing on WebKit, filling `firstNameInput` immediately after clicking Checkout occasionally left the First Name field blank due to form render/focus timing; waiting for the checkout URL and focusing the input resolved it cleanly across all 21 runs.
+
+4. **CI/CD Pipeline (`.github/workflows/playwright.yml`):**
+   * Triggers automatically on every `push` or `pull_request` to `main` or `master`.
+   * Runs on `ubuntu-latest` with Node.js LTS, installs exact dependencies with `npm ci`, installs browsers and OS dependencies with `npx playwright install --with-deps`, runs `npx playwright test`, and uploads `playwright-report/` as a downloadable artifact retained for 30 days (`actions/upload-artifact@v4`).
+
+---
+
+## Part 9: Commands to Run & Expected Outcomes
+
+Use this reference table to know **what to run** and **what outcome you should see**:
+
+| Goal | Command | Expected Outcome |
+| :--- | :--- | :--- |
+| **Run full cross-browser suite** | `npx playwright test` | Executes **21 tests** across `chromium`, `firefox`, and `webkit`. Terminal ends with `21 passed` (typically ~20–30s depending on machine/network). |
+| **Run on Chromium only (fast check)** | `npx playwright test --project=chromium` | Executes **7 tests** on Chromium and prints `7 passed`. |
+| **Watch tests visually in browser** | `npx playwright test --project=chromium --headed` | Opens a visible Chrome window and executes the 7 Chromium tests live. |
+| **Run a single spec file** | `npx playwright test tests/login.spec.js` | Executes only the 4 login tests across 3 browsers (`12 passed`). |
+| **Open interactive UI Mode** | `npx playwright test --ui` | Launches Playwright's visual test runner where you can step through actions, inspect DOM snapshots, and watch timelines. |
+| **Debug a test step-by-step** | `npx playwright test --debug` | Opens Playwright Inspector to pause and step through each locator and assertion. |
+| **View the HTML test report** | `npx playwright show-report` | Opens the local report server in your browser showing `All 21`, `Passed 21`, `Failed 0`, `Flaky 0`, `Skipped 0`, and per-browser durations. |
+
+> [!NOTE]
+> These tests run against the live public site `https://www.saucedemo.com/`. An active internet connection is required; if offline or blocked by DNS/firewall, tests will fail with `ERR_NAME_NOT_RESOLVED` or `Could not resolve hostname`.
+
+---
+
+## Part 10: Playwright Learning Reference (Deep Dive)
+
+This project is designed as a hands-on Playwright learning handbook. Below are the core Playwright concepts demonstrated in this codebase:
+
+1. **Test Runner & Built-in `{ page }` Fixture:**
+   * Playwright's `test('name', async ({ page }) => { ... })` automatically creates a fresh `BrowserContext` and `Page` per test and tears them down afterward. This guarantees **test isolation**—if `TC_AUTO_07` adds items to the cart, it will never affect `TC_AUTO_05` or `TC_AUTO_06`.
+
+2. **Grouping & Hooks (`test.describe` & `test.beforeEach`):**
+   * `test.describe(...)` groups related tests into logical suites (`Authentication Test Suite` and `E-Commerce Shopping & Checkout Suite`).
+   * `test.beforeEach(...)` eliminates repetitive login steps in `e2e-purchase.spec.js` so every shopping/checkout test starts authenticated on `inventory.html`.
+
+3. **Locator Priority & Parameterized Locators:**
+   * Static locators are defined once in the Page Object `constructor(page)` (e.g., `page.locator('[data-test="username"]')`).
+   * Dynamic locators use template methods (e.g., `page.locator(\`[data-test="add-to-cart-${productSlug}"]\`)`) so a single method works for any product (`sauce-labs-backpack`, `sauce-labs-bike-light`, etc.).
+
+4. **Web-First Assertions vs. Value Assertions:**
+   * **Web-First (auto-retrying):** `await expect(page).toHaveURL(/.*inventory.html/)`, `await expect(loginPage.errorMessage).toBeVisible()`, and `await expect(inventoryPage.cartBadge).toHaveText('2')` automatically poll until the condition passes or the timeout expires.
+   * **Value Assertion:** `expect(firstItemPrice).toBe('$7.99')` checks an already-fetched string value synchronously.
+
+5. **Failure Artifacts & Traces:**
+   * When a test fails, Playwright automatically saves a Markdown DOM snapshot (`test-results/<test-name>/error-context.md`) showing the exact page state and failing line.
+   * With `trace: 'on-first-retry'` in `playwright.config.js`, CI retries capture a full trace (`trace.zip`) viewable via `npx playwright show-trace` or inside the HTML report.
+
+---
+
+## Part 11: What I Have Learned From This Project
+
+By building and verifying this framework from scratch, I gained practical experience in:
+
+* **Designing a Maintainable POM Architecture:** Separating element locators and UI interactions (`pages/`) from test scenarios and assertions (`tests/`) so UI changes only require updating a single Page Object file.
+* **Writing Resilient Locator Strategies:** Choosing stable `[data-test="..."]` attributes and clean class selectors over brittle XPaths.
+* **Comprehensive Test Case Design:** Covering both **positive happy paths** (`TC_AUTO_01`, `TC_AUTO_05`, `TC_AUTO_07`) and **negative/validation edge cases** (`TC_AUTO_02` locked-out user, `TC_AUTO_03` wrong password, `TC_AUTO_04` blank password, `TC_AUTO_06` blank checkout fields).
+* **Cross-Browser Testing & Debugging:** Executing the same suite across Chromium, Firefox, and WebKit, diagnosing a WebKit-specific form focus/hydration timing issue in `CheckoutPage.js`, and fixing it cleanly without hard-coded `sleep()` calls.
+* **Test Reporting & Visual Proof:** Generating Playwright HTML reports and capturing report artifacts (`playwright-report-results.png`) for documentation.
+* **CI/CD Automation with GitHub Actions:** Configuring automated cloud test runs and report artifact uploads on every `push` and `pull_request`.
+
+---
+
+## Part 12: Setup & Run Guide for Anyone Cloning This Repository
+
+If someone clones this repository onto a new machine, follow these exact steps to set it up and run the tests:
+
+### Prerequisites
+* **Node.js (LTS)** (`v18+` or `v20+` / `v22+` recommended) and **npm**
+* **Git**
+* **Internet access** (to install npm packages, download Playwright browsers, and reach `https://www.saucedemo.com/`)
+
+### Step-by-Step Setup
+
+1. **Clone the repository and enter the folder:**
+   ```bash
+   git clone https://github.com/<your-username>/saucedemo-playwright-automation.git
+   cd saucedemo-playwright-automation
+   ```
+
+2. **Install Node.js dependencies:**
+   ```bash
+   npm install
+   ```
+   *(This installs `@playwright/test` and `@types/node` from `package-lock.json`.)*
+
+3. **Install Playwright browser binaries:**
+   * **Windows / macOS:**
+     ```bash
+     npx playwright install
+     ```
+   * **Linux (e.g., Ubuntu/Debian, to also install required OS libraries):**
+     ```bash
+     npx playwright install --with-deps
+     ```
+
+4. **Run the full test suite:**
+   ```bash
+   npx playwright test
+   ```
+   **Expected outcome:** `21 passed` across Chromium, Firefox, and WebKit.
+
+5. **View the HTML test report:**
+   ```bash
+   npx playwright show-report
+   ```
+
+### Quick Troubleshooting
+* **`Executable doesn't exist` error:** Run `npx playwright install` again to download the Playwright-managed browser binaries.
+* **`ERR_NAME_NOT_RESOLVED` / `Could not resolve hostname`:** Verify your internet connection and that `https://www.saucedemo.com/` is not blocked by a proxy or firewall.
+* **Timeout on a slow network:** Re-run with a higher timeout, e.g. `npx playwright test --timeout=60000`, or run a single browser project first (`npx playwright test --project=chromium`).
